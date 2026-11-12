@@ -20,15 +20,11 @@ from pathlib import Path
 import pyautogui
 import subprocess
 
+#YOUTUBE_TWITCH_CHANNEL
+
 # Initialize the client pointing to your remote LAN host
 client = Client(host='http://192.168.50.50:11434')
 systemPrompt = Path("system_prompt.txt").read_text()
-print(systemPrompt)
-
-pyautogui.moveTo(500, 500)
-pyautogui.moveTo(500, 500)
-pyautogui.moveTo(500, 500)
-pyautogui.moveTo(500, 500)
 
 def open_website(url: str) -> None:
     """
