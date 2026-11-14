@@ -1,5 +1,13 @@
 ## What are we building?
 ## Chat can control my mouse
+## TODO pywinauto
+## TODO pyautogui
+## TODO pyautogui
+## TODO pyautogui
+## TODO  loop store messages
+## TODO  
+## TODO 
+## TODO 
 ## AI Agent like MetaMuse and GrokBot
 #include <vector.h>
 ## TODO open browser window to a website
@@ -7,7 +15,6 @@
 ## TODO Shell Access  ⚠️⚠️    ⚠️⚠️⚠️⚠️⚠️⚠️ ⚠️
 ## TODO Screenshot so the AI can see what is happening
 ## TODO Move cursor and type on screen
-## TODO pyautogui
 ## TODO run as subscriber and commuincate in a loop
 
 import niquests
@@ -32,7 +39,6 @@ client = Client(host='http://192.168.50.50:11434')
 systemPrompt = Path("system_prompt.txt").read_text()
 
 def open_website(url: str) -> None:
-    return None
     """
     Open a website.
 
@@ -49,29 +55,50 @@ def move_cursor(x: int, y: int) -> None:
         x: integer value of x position
         y: integer value of y position
     """
-    pyautogui.moveTo(x, y, duration=2.5)
+    pyautogui.moveTo(x, y, duration=2.5, tween=pyautogui.easeInOutQuad)
 
-def weather(city: str) -> str:
+def move_and_click(x: int, y: int) -> None:
     """
-    Get weather for a city name.
+    Move the user's cursor on the screen to an X, Y location and click mouse button.
 
     Args:
-        city: Name of a city (e.g. "New York")
+        x: integer value of x position
+        y: integer value of y position
     """
-    return "22°C"
+    pyautogui.click(x=x, y=y, duration=2.5, tween=pyautogui.easeInOutQuad)
 
+def scroll(amount: int) -> None:
+    """
+    Scroll the user's screen by number of clicks. 10 for up and -10 for down for example.
+
+    Args:
+        amount: number of scroll clicks to move the screen up or down 
+    """
+    pyautogui.scroll(amount)
+
+def typing(message: str) -> None:
+    """
+    Typing allows a text message on the currently focused input text box to be.
+
+    Args:
+        message: String of text to type as a text message.
+    """
+    pyautogui.write(message, interval=0.05)  
+
+### TODO configurable
 functions = {
-    'weather': weather,
-    'open_website': open_website,
+    #'open_website': open_website,
     'move_cursor': move_cursor,
+    #'scroll': scroll,
+    #'move_and_click': move_and_click,
+    'typing': typing,
 }
 
-### 
+### Chat can control
 def subscribe(channel: str):
     timetoken = '0'
     origin = 'https://ps.pndsn.com'
     print('Subscription Started and Ready')
-    open_website('https://www.pubnub.com/')
 
     while True:
         url = f'{origin}/subscribe/demo/{channel}/0/{timetoken}'
@@ -108,8 +135,9 @@ def ask(prompt: str) -> str:
 #prompt = 'Open google website homepage'
 #ask(prompt)
 
-subprocess.run(["open", "https://www.google.com/"])
 
+
+#pyautogui.alert('This is the message to display.')
 channel = os.getenv("YOUTUBE_TWITCH_CHANNEL", "EMPTY")
 thread = threading.Thread(target=subscribe, args=(channel, ))
 thread.start()
