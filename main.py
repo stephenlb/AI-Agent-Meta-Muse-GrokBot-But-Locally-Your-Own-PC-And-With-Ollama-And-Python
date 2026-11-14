@@ -1,10 +1,14 @@
 ## What are we building?
 ## Chat can control my mouse
+## TODO ViSION - add screenshots to AI so it knows where to click
+## TODO - add click
+## TODO - add screenshot
+## TODO - add ollama screenshot data on post to server
 ## TODO pywinauto
 ## TODO pyautogui
 ## TODO pyautogui
 ## TODO pyautogui
-## TODO  loop store messages
+## TODO loop store messages
 ## TODO  
 ## TODO 
 ## TODO 
@@ -38,6 +42,20 @@ import subprocess
 client = Client(host='http://192.168.50.50:11434')
 systemPrompt = Path("system_prompt.txt").read_text()
 
+
+def screenshot() -> None:
+    """
+    Screenshot the screen so we can see it.
+
+    Args:
+        None
+    """
+    #image = pyautogui.screenshot()
+    #pyautogui.screenshot("./full_screen.png")
+    #pyautogui.screenshot("/Users/stephen/Desktop/iii/AI-Agent-Access-Remotely/full_screen.png")
+    region_image = pyautogui.screenshot(region=(0, 0, 1920, 1080))
+    region_image.save("partial_screen.png")
+
 def open_website(url: str) -> None:
     """
     Open a website.
@@ -56,6 +74,17 @@ def move_cursor(x: int, y: int) -> None:
         y: integer value of y position
     """
     pyautogui.moveTo(x, y, duration=2.5, tween=pyautogui.easeInOutQuad)
+
+def google_search(search: str) -> None:
+    """
+    Search google.
+
+    Args
+        search: String of text to search.
+    """
+    
+    url = "https://www.google.com/search?q=" + search.replace(" ", "%20")
+    open_website(url)
 
 def move_and_click(x: int, y: int) -> None:
     """
@@ -88,10 +117,12 @@ def typing(message: str) -> None:
 ### TODO configurable
 functions = {
     #'open_website': open_website,
+    'screenshot': screenshot,
     'move_cursor': move_cursor,
+    #'google_search': google_search,
     #'scroll': scroll,
     #'move_and_click': move_and_click,
-    'typing': typing,
+    #'typing': typing,
 }
 
 ### Chat can control
@@ -108,7 +139,9 @@ def subscribe(channel: str):
         timetoken = payload[1]
 
         for message in messages:
-            print(message)
+            user = message['user']
+            text = message['message']
+            print(f"\033[1;31;107m{user}: \033[0m{text}")
             prompt = message['message']
             ask(prompt)
 
@@ -123,12 +156,12 @@ def ask(prompt: str) -> str:
         tools=list(functions.values()),
     )
 
-    print(response.message)
-    print("=======================")
+    print(f"Tool: {response.message.tool_calls}")
 
     for call in response.message.tool_calls or []:
         name = call.function.name
         args = call.function.arguments
+        if not name in functions: continue
         resp = functions[name](**args)
         print(resp)
 
