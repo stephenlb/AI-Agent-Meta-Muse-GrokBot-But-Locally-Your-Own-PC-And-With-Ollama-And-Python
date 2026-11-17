@@ -32,6 +32,8 @@
 import niquests
 import threading
 import random
+import shutil
+import time
 
 import os
 import sys
@@ -134,16 +136,42 @@ def typing(message: str) -> None:
     """
     pyautogui.write(message, interval=0.05)  
 
-### TODO configurable
-functions = {
-    'open_website': open_website,
-    #'screenshot': screenshot,
-    'move_cursor': move_cursor,
-    'google_search': google_search,
-    #'scroll': scroll,
-    #'move_and_click': move_and_click,
-    'typing': typing,
-}
+
+### Chat colors: 24-bit RGB so the terminal theme cannot mute them, one per user
+NEON_COLORS = [
+    (255, 60, 90),    # hot red
+    (60, 255, 120),   # neon green
+    (255, 230, 0),    # yellow
+    (0, 190, 255),    # electric blue
+    (255, 80, 255),   # magenta
+    (0, 255, 230),    # cyan
+    (255, 140, 0),    # orange
+]
+RESET = "\033[0m"
+
+def format_chat(user: str, text: str, shift: int = 0) -> str:
+    # shift rotates both colors through the palette, used by the flash animation
+    i = (sum(map(ord, user)) + shift) % len(NEON_COLORS)
+    ur, ug, ub = NEON_COLORS[i]
+    # Message uses a different neon color than the username chip
+    tr, tg, tb = NEON_COLORS[(i + 3) % len(NEON_COLORS)]
+    # Black bold text on bright RGB backgrounds so both stay readable
+    return (
+        f"\033[1;30;48;2;{ur};{ug};{ub}m {user} {RESET}"
+        f"\033[1;30;48;2;{tr};{tg};{tb}m {text} {RESET}"
+    )
+
+def print_chat_animated(user: str, text: str, frames: int = 14, delay: float = 0.05) -> None:
+    """Flash the message through the palette in place, then settle on its own colors."""
+    # A wrapped line cannot be redrawn with \r, so long messages skip the animation
+    if len(user) + len(text) + 4 >= shutil.get_terminal_size().columns:
+        print(format_chat(user, text))
+        return
+    for frame in range(frames):
+        print("\r" + format_chat(user, text, shift=frame), end="", flush=True)
+        time.sleep(delay)
+    # Final frame with no shift is the user's settled colors
+    print("\r" + format_chat(user, text))
 
 ### Chat can control
 def subscribe(channel: str):
@@ -161,7 +189,7 @@ def subscribe(channel: str):
         for message in messages:
             user = message['user']
             text = message['message']
-            print(f"\033[1;31;107m{user}: \033[0m{text}")
+            print_chat_animated(user, text)
             prompt = message['message']
             #ask(prompt)
 
@@ -170,6 +198,17 @@ def subscribe(channel: str):
 ## TODO 
 ## TODO 
 ## TODO 
+
+### Tools
+FUNCTIONS = {
+    'open_website': open_website,
+    #'screenshot': screenshot,
+    'move_cursor': move_cursor,
+    'google_search': google_search,
+    'scroll': scroll,
+    'move_and_click': move_and_click,
+    'typing': typing,
+}
 
 
 def task(prompt: str) -> str:
@@ -194,7 +233,7 @@ def task(prompt: str) -> str:
         response = client.chat(
             model='gemma4:12b',
             messages=messages,
-            tools=list(functions.values()),
+            tools=list(FUNCTIONS.values()),
         )
         ### TODO Why ???? it shoudl not stop buit it does
         #working = not response.done
@@ -207,7 +246,7 @@ def task(prompt: str) -> str:
             args = call.function.arguments
 
             ## Let the AI know it got it wrong
-            if not name in functions:
+            if not name in FUNCTIONS:
                 messages.append({
                     "role": "tool",
                     "tool_name": name,
@@ -215,7 +254,7 @@ def task(prompt: str) -> str:
                 })
                 continue
 
-            result = functions[name](**args)
+            result = FUNCTIONS[name](**args)
             print(result)
             path = screenshot()
             messages.append({
@@ -225,7 +264,6 @@ def task(prompt: str) -> str:
                 "images": [path],
             })
 
-    print(f"DONE!!!! -> {response.done_reason}")
     print(f"DONE!!!! -> {response.done_reason}")
 
 def ask(prompt: str) -> str:
@@ -244,7 +282,7 @@ def ask(prompt: str) -> str:
                 'images': [path],
             },
         ],
-        tools=list(functions.values()),
+        tools=list(FUNCTIONS.values()),
     )
 
     print(response)#.message.content)
@@ -253,8 +291,8 @@ def ask(prompt: str) -> str:
     for call in response.message.tool_calls or []:
         name = call.function.name
         args = call.function.arguments
-        if not name in functions: continue
-        resp = functions[name](**args)
+        if not name in FUNCTIONS: continue
+        resp = FUNCTIONS[name](**args)
         print(resp)
 
 #prompt = 'Open google and search for grapes'
