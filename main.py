@@ -1,5 +1,13 @@
 ## What are we building?
 ## Chat can control my mouse
+## AI that can control my PC
+## Tomorrow - we need to 
+## Tomorrow - we need to create a session loop for ai to compete the task
+## Tomorrow - we need to 
+
+## - remotely by giving it commands through an app
+## - Stephen asks the in app to add grapes to my shopping cart
+## Today's task is to give VIsual Data to the LLM
 ## TODO ViSION - add screenshots to AI so it knows where to click
 ## TODO - add click
 ## TODO - add screenshot
@@ -23,12 +31,14 @@
 
 import niquests
 import threading
+import random
 
 import os
 import sys
 import json
 from ollama import Client
 from pathlib import Path
+from PIL import Image
 
 ###  TODO janluofficial Add another function to let the ai grab the current mouse position and screen resolution so it can for example react to “move my mouse to the middle of the screen”
 # pyautogui.moveTo(100, 200, duration=1)
@@ -42,8 +52,7 @@ import subprocess
 client = Client(host='http://192.168.50.50:11434')
 systemPrompt = Path("system_prompt.txt").read_text()
 
-
-def screenshot() -> None:
+def screenshot() -> str: #Image.Image:
     """
     Screenshot the screen so we can see it.
 
@@ -53,8 +62,17 @@ def screenshot() -> None:
     #image = pyautogui.screenshot()
     #pyautogui.screenshot("./full_screen.png")
     #pyautogui.screenshot("/Users/stephen/Desktop/iii/AI-Agent-Access-Remotely/full_screen.png")
-    region_image = pyautogui.screenshot(region=(0, 0, 1920, 1080))
-    region_image.save("partial_screen.png")
+    width, height = pyautogui.size()
+    image = pyautogui.screenshot(region=(0, 0, width, height))
+    imageId = random.randint(0,1000000)
+    path = f"screen{imageId}.png"
+    image.save(path)
+    return path
+
+ALLOWED = [
+    'http://www.amazon.com'
+    'http://www.google.com'
+]
 
 def open_website(url: str) -> None:
     """
@@ -63,6 +81,8 @@ def open_website(url: str) -> None:
     Args:
         url: The website address.
     """
+    #for allowed in ALLOWED:
+    #    if url.find(allowed) != 0: return 
     subprocess.run(["open", url])
 
 def move_cursor(x: int, y: int) -> None:
@@ -116,13 +136,13 @@ def typing(message: str) -> None:
 
 ### TODO configurable
 functions = {
-    #'open_website': open_website,
-    'screenshot': screenshot,
+    'open_website': open_website,
+    #'screenshot': screenshot,
     'move_cursor': move_cursor,
-    #'google_search': google_search,
+    'google_search': google_search,
     #'scroll': scroll,
     #'move_and_click': move_and_click,
-    #'typing': typing,
+    'typing': typing,
 }
 
 ### Chat can control
@@ -143,19 +163,91 @@ def subscribe(channel: str):
             text = message['message']
             print(f"\033[1;31;107m{user}: \033[0m{text}")
             prompt = message['message']
-            ask(prompt)
+            #ask(prompt)
+
+## TODO Chat Sessiongg
+## TODO 
+## TODO 
+## TODO 
+## TODO 
+
+
+def task(prompt: str) -> str:
+    path = screenshot()
+    messages = [
+        {
+            'role': 'system',
+            'content': systemPrompt
+        },
+        {
+            'role': 'user',
+            'content': prompt,
+            'images': [path],
+        },
+    ]
+
+    # Use the client object exactly like the global functions
+    response = None
+    working = True
+    while working:
+        #path = screenshot()
+        response = client.chat(
+            model='gemma4:12b',
+            messages=messages,
+            tools=list(functions.values()),
+        )
+        ### TODO Why ???? it shoudl not stop buit it does
+        #working = not response.done
+
+        print(response.message.content)
+        print(f"Tool: {response.message.tool_calls}")
+
+        for call in response.message.tool_calls or []:
+            name = call.function.name
+            args = call.function.arguments
+
+            ## Let the AI know it got it wrong
+            if not name in functions:
+                messages.append({
+                    "role": "tool",
+                    "tool_name": name,
+                    "content": f"'{name}' does not exist, try another function name.",
+                })
+                continue
+
+            result = functions[name](**args)
+            print(result)
+            path = screenshot()
+            messages.append({
+                "role": "tool",
+                "tool_name": name,
+                "content": str(result),
+                "images": [path],
+            })
+
+    print(f"DONE!!!! -> {response.done_reason}")
+    print(f"DONE!!!! -> {response.done_reason}")
 
 def ask(prompt: str) -> str:
     # Use the client object exactly like the global functions
+    path = screenshot()
     response = client.chat(
         model='gemma4:12b',
         messages=[
-            {'role': 'system', 'content': systemPrompt},
-            {'role': 'user', 'content': prompt},
+            {
+                'role': 'system',
+                'content': systemPrompt
+            },
+            {
+                'role': 'user',
+                'content': prompt,
+                'images': [path],
+            },
         ],
         tools=list(functions.values()),
     )
 
+    print(response)#.message.content)
     print(f"Tool: {response.message.tool_calls}")
 
     for call in response.message.tool_calls or []:
@@ -165,10 +257,8 @@ def ask(prompt: str) -> str:
         resp = functions[name](**args)
         print(resp)
 
-#prompt = 'Open google website homepage'
-#ask(prompt)
-
-
+#prompt = 'Open google and search for grapes'
+#task(prompt)
 
 #pyautogui.alert('This is the message to display.')
 channel = os.getenv("YOUTUBE_TWITCH_CHANNEL", "EMPTY")
