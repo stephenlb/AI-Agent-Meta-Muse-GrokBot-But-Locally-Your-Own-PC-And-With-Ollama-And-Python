@@ -239,14 +239,7 @@ FUNCTIONS = {
     'typing': typing,
 }
 
-# During a task the model cannot navigate by URL, only click, scroll and type
-TASK_FUNCTIONS = {k: v for k, v in FUNCTIONS.items() if k not in ('open_website', 'google_search')}
-
-def task(prompt: str, start_url: str = "") -> str:
-    if start_url:
-        # Script the deterministic part so the model never has to invent URLs
-        open_website(start_url)
-        time.sleep(8)
+def task(prompt: str) -> str:
     path = screenshot()
     messages = [
         {
@@ -277,7 +270,7 @@ def task(prompt: str, start_url: str = "") -> str:
                 response = client.chat(
                     model='gemma4:26b',
                     messages=messages,
-                    tools=list(TASK_FUNCTIONS.values()),
+                    tools=list(FUNCTIONS.values()),
                 )
                 break
             except Exception as e:
@@ -308,7 +301,7 @@ def task(prompt: str, start_url: str = "") -> str:
             args = call.function.arguments
 
             ## Let the AI know it got it wrong
-            if not name in TASK_FUNCTIONS:
+            if not name in FUNCTIONS:
                 messages.append({
                     "role": "tool",
                     "tool_name": name,
@@ -320,7 +313,7 @@ def task(prompt: str, start_url: str = "") -> str:
             repeated = call_key == last_call
             last_call = call_key
             try:
-                result = TASK_FUNCTIONS[name](**args)
+                result = FUNCTIONS[name](**args)
             except Exception as e:
                 result = f"Error calling {name}: {e}"
             if repeated:
@@ -371,10 +364,9 @@ def ask(prompt: str) -> str:
 #prompt = "move Tab to the link -> Pre-auth RCE in Nginx HTTP/2 handling (wiz.io)" 
 #prompt = "Open Hackernews website"
 #prompt = "Find random funny safe for work memez on Reddit"
-START_URL = os.getenv("START_URL", "https://www.alaskaair.com/search/results?O=SEA&D=SFO&OD=2026-12-03&A=1&RT=false&locale=en-us")
-prompt = os.getenv("TASK_PROMPT", "On Alaska Air, add a one-way flight from Seattle (SEA) to San Francisco (SFO) to the cart. The Alaska one-way flight results from SEA to SFO are already open. You cannot open URLs. Steps: 1) click the Saver fare of the first flight and click Continue with Saver in any popup, 3) if asked for a return flight, click the Saver fare of the first return flight and Continue with Saver, 4) continue until the trip review or cart page, then reply DONE. Decline every paid upsell (for example click Continue with flights, not Make it refundable). Do not buy anything.")
+prompt = os.getenv("TASK_PROMPT", "On Alaska Air, add a one-way flight from Seattle (SEA) to San Francisco (SFO) to the cart. Steps: 1) open the Alaska Airlines website and search for a one-way flight from SEA to SFO, 2) click the Saver fare of the first flight and click Continue with Saver in any popup, 3) if asked for a return flight, click the Saver fare of the first return flight and Continue with Saver, 4) continue until the trip review or cart page, then reply DONE. Decline every paid upsell (for example click Continue with flights, not Make it refundable). Do not buy anything.")
 #time.sleep(2)
-task(prompt, START_URL)
+task(prompt)
 
 #pyautogui.alert('This is the message to display.')
 channel = os.getenv("YOUTUBE_TWITCH_CHANNEL", "EMPTY")
