@@ -1,9 +1,14 @@
 ## What are we building?
-## Chat can control my mouse
 ## AI that can control my PC
-## Tomorrow - we need to 
-## Tomorrow - we need to create a session loop for ai to compete the task
-## Tomorrow - we need to 
+
+## ✅ TODO - add result message.content from the pervious outoupt
+
+## Today: Getting Footage for the video - get the AI to perform common computer tasks:
+## Poll for what we do next
+
+## Open Hackernews and click on the top post
+## Find random funny safe for work memez on Reddit
+## Add a flight from Seattle to San Francsico on alaska air to the cart for my review
 
 ## - remotely by giving it commands through an app
 ## - Stephen asks the in app to add grapes to my shopping cart
@@ -40,7 +45,7 @@ import sys
 import json
 from ollama import Client
 from pathlib import Path
-from PIL import Image
+from PIL import Image, ImageDraw
 
 ###  TODO janluofficial Add another function to let the ai grab the current mouse position and screen resolution so it can for example react to “move my mouse to the middle of the screen”
 # pyautogui.moveTo(100, 200, duration=1)
@@ -51,8 +56,24 @@ import subprocess
 #YOUTUBE_TWITCH_CHANNEL
 
 # Initialize the client pointing to your remote LAN host
-client = Client(host='http://192.168.50.50:11434')
+client = Client(host='http://192.168.50.50:11434', timeout=60)
 systemPrompt = Path("system_prompt.txt").read_text()
+
+MODEL_W, MODEL_H = 1280, 720
+
+def draw_grid(image: Image.Image) -> None:
+    """Draw a labeled 0-1000 grid (lines every 100) so the model can read click positions."""
+    draw = ImageDraw.Draw(image)
+    for gx in range(0, 1001, 100):
+        px = min(int(gx * MODEL_W / 1000), MODEL_W - 1)
+        draw.line([(px, 0), (px, MODEL_H)], fill=(255, 0, 0), width=1)
+    for gy in range(0, 1001, 100):
+        py = min(int(gy * MODEL_H / 1000), MODEL_H - 1)
+        draw.line([(0, py), (MODEL_W, py)], fill=(255, 0, 0), width=1)
+    for gx in range(0, 1000, 100):
+        for gy in range(0, 1000, 100):
+            px, py = int(gx * MODEL_W / 1000), int(gy * MODEL_H / 1000)
+            draw.text((px + 2, py + 1), f"{gx},{gy}", fill=(255, 0, 0))
 
 def screenshot() -> str: #Image.Image:
     """
@@ -64,8 +85,12 @@ def screenshot() -> str: #Image.Image:
     #image = pyautogui.screenshot()
     #pyautogui.screenshot("./full_screen.png")
     #pyautogui.screenshot("/Users/stephen/Desktop/iii/AI-Agent-Access-Remotely/full_screen.png")
+    time.sleep(0.8)
     width, height = pyautogui.size()
     image = pyautogui.screenshot(region=(0, 0, width, height))
+    # Send the model a fixed 1280x720 image so the coordinates it reads are on a known scale.
+    # move_cursor_and_click scales them back up to the real screen.
+    image = image.resize((MODEL_W, MODEL_H), Image.LANCZOS)
     imageId = random.randint(0,1000000)
     path = f"screen{imageId}.png"
     image.save(path)
@@ -108,7 +133,7 @@ def google_search(search: str) -> None:
     url = "https://www.google.com/search?q=" + search.replace(" ", "%20")
     open_website(url)
 
-def move_and_click(x: int, y: int) -> None:
+def move_cursor_and_click(x: int, y: int) -> None:
     """
     Move the user's cursor on the screen to an X, Y location and click mouse button.
 
@@ -116,7 +141,11 @@ def move_and_click(x: int, y: int) -> None:
         x: integer value of x position
         y: integer value of y position
     """
-    pyautogui.click(x=x, y=y, duration=2.5, tween=pyautogui.easeInOutQuad)
+    sw, sh = pyautogui.size()
+    # The model returns coordinates on a 0-1000 grid, so scale to the real screen
+    rx, ry = int(x * sw / 1000), int(y * sh / 1000)
+    print(f"click model=({x}, {y}) real=({rx}, {ry}) screen={pyautogui.size()}")
+    pyautogui.click(x=rx, y=ry, duration=0.4, tween=pyautogui.easeInOutQuad)
 
 def scroll(amount: int) -> None:
     """
@@ -203,15 +232,21 @@ def subscribe(channel: str):
 FUNCTIONS = {
     'open_website': open_website,
     #'screenshot': screenshot,
-    'move_cursor': move_cursor,
+    #'move_cursor': move_cursor,
     'google_search': google_search,
     'scroll': scroll,
-    'move_and_click': move_and_click,
+    'move_cursor_and_click': move_cursor_and_click,
     'typing': typing,
 }
 
+# During a task the model cannot navigate by URL, only click, scroll and type
+TASK_FUNCTIONS = {k: v for k, v in FUNCTIONS.items() if k not in ('open_website', 'google_search')}
 
-def task(prompt: str) -> str:
+def task(prompt: str, start_url: str = "") -> str:
+    if start_url:
+        # Script the deterministic part so the model never has to invent URLs
+        open_website(start_url)
+        time.sleep(8)
     path = screenshot()
     messages = [
         {
@@ -227,26 +262,53 @@ def task(prompt: str) -> str:
 
     # Use the client object exactly like the global functions
     response = None
-    working = True
-    while working:
-        #path = screenshot()
-        response = client.chat(
-            model='gemma4:12b',
-            messages=messages,
-            tools=list(FUNCTIONS.values()),
-        )
-        ### TODO Why ???? it shoudl not stop buit it does
-        #working = not response.done
+    last_call = None
+    MAX_STEPS = 30  # safety cap so a confused model cannot loop forever
+    for step in range(MAX_STEPS):
+        # Only the newest screenshot matters; older ones just slow down every call
+        last_img = max((i for i, m in enumerate(messages) if (m.get("images") if isinstance(m, dict) else None)), default=-1)
+        for i, m in enumerate(messages):
+            if isinstance(m, dict) and m.get("images") and i != last_img:
+                m.pop("images")
+        t0 = time.time()
+        response = None
+        for attempt in range(3):
+            try:
+                response = client.chat(
+                    model='gemma4:26b',
+                    messages=messages,
+                    tools=list(TASK_FUNCTIONS.values()),
+                )
+                break
+            except Exception as e:
+                print(f"chat failed (attempt {attempt + 1}): {type(e).__name__}")
+        if response is None:
+            print("Giving up: the model server did not answer.")
+            break
+        print(f"chat took {time.time() - t0:.1f}s")
+        # Keep the full message (including tool_calls) so the model sees what it already did
+        messages.append(response.message)
 
         print(response.message.content)
         print(f"Tool: {response.message.tool_calls}")
 
-        for call in response.message.tool_calls or []:
+        # No tool calls: finished only if the model says DONE, otherwise nudge it to act
+        if not response.message.tool_calls:
+            if "DONE" in (response.message.content or ""):
+                break
+            messages.append({
+                "role": "user",
+                "content": "Do not wait or only describe a plan. Call a tool now to take the next step. When the whole task is finished, reply with the word DONE.",
+                "images": [screenshot()],
+            })
+            continue
+
+        for call in response.message.tool_calls:
             name = call.function.name
             args = call.function.arguments
 
             ## Let the AI know it got it wrong
-            if not name in FUNCTIONS:
+            if not name in TASK_FUNCTIONS:
                 messages.append({
                     "role": "tool",
                     "tool_name": name,
@@ -254,13 +316,22 @@ def task(prompt: str) -> str:
                 })
                 continue
 
-            result = FUNCTIONS[name](**args)
+            call_key = (name, json.dumps(args, sort_keys=True))
+            repeated = call_key == last_call
+            last_call = call_key
+            try:
+                result = TASK_FUNCTIONS[name](**args)
+            except Exception as e:
+                result = f"Error calling {name}: {e}"
+            if repeated:
+                result = "That is the same call as last time and the screen may not have changed. Look at the screenshot and try a different target or approach."
             print(result)
             path = screenshot()
             messages.append({
                 "role": "tool",
                 "tool_name": name,
-                "content": str(result),
+                # Functions return None, so tell the model the action ran and to check the screenshot
+                "content": str(result) if result is not None else "Done. See the attached screenshot for the current screen.",
                 "images": [path],
             })
 
@@ -295,8 +366,15 @@ def ask(prompt: str) -> str:
         resp = FUNCTIONS[name](**args)
         print(resp)
 
-#prompt = 'Open google and search for grapes'
-#task(prompt)
+#prompt = 'Open https://news.ycombinator.com/ website and click on the top post.'
+#prompt = 'Click on the top post for the orange website on the screen.'
+#prompt = "move Tab to the link -> Pre-auth RCE in Nginx HTTP/2 handling (wiz.io)" 
+#prompt = "Open Hackernews website"
+#prompt = "Find random funny safe for work memez on Reddit"
+START_URL = os.getenv("START_URL", "https://www.alaskaair.com/search/results?O=SEA&D=SFO&OD=2026-12-03&A=1&RT=false&locale=en-us")
+prompt = os.getenv("TASK_PROMPT", "On Alaska Air, add a one-way flight from Seattle (SEA) to San Francisco (SFO) to the cart. The Alaska one-way flight results from SEA to SFO are already open. You cannot open URLs. Steps: 1) click the Saver fare of the first flight and click Continue with Saver in any popup, 3) if asked for a return flight, click the Saver fare of the first return flight and Continue with Saver, 4) continue until the trip review or cart page, then reply DONE. Decline every paid upsell (for example click Continue with flights, not Make it refundable). Do not buy anything.")
+#time.sleep(2)
+task(prompt, START_URL)
 
 #pyautogui.alert('This is the message to display.')
 channel = os.getenv("YOUTUBE_TWITCH_CHANNEL", "EMPTY")
