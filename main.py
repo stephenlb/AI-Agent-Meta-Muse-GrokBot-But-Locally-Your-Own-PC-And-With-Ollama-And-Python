@@ -364,9 +364,9 @@ def ask(prompt: str) -> str:
 #prompt = "move Tab to the link -> Pre-auth RCE in Nginx HTTP/2 handling (wiz.io)" 
 #prompt = "Open Hackernews website"
 #prompt = "Find random funny safe for work memez on Reddit"
-prompt = os.getenv("TASK_PROMPT", "On Alaska Air, add a one-way flight from Seattle (SEA) to San Francisco (SFO) to the cart. Steps: 1) open the Alaska Airlines website and search for a one-way flight from SEA to SFO, 2) click the Saver fare of the first flight and click Continue with Saver in any popup, 3) if asked for a return flight, click the Saver fare of the first return flight and Continue with Saver, 4) continue until the trip review or cart page, then reply DONE. Decline every paid upsell (for example click Continue with flights, not Make it refundable). Do not buy anything.")
+#prompt = os.getenv("TASK_PROMPT", "On Alaska Air, add a one-way flight from Seattle (SEA) to San Francisco (SFO) to the cart. Steps: 1) open the Alaska Airlines website and search for a one-way flight from SEA to SFO, 2) click the Saver fare of the first flight and click Continue with Saver in any popup, 3) if asked for a return flight, click the Saver fare of the first return flight and Continue with Saver, 4) continue until the trip review or cart page, then reply DONE. Decline every paid upsell (for example click Continue with flights, not Make it refundable). Do not buy anything.")
 #time.sleep(2)
-task(prompt)
+#task(prompt)
 
 #pyautogui.alert('This is the message to display.')
 channel = os.getenv("YOUTUBE_TWITCH_CHANNEL", "EMPTY")
